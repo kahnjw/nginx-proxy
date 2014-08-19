@@ -39,6 +39,10 @@ upstream {{ $host }} {
 	{{ end }}
 {{ end }}
 }
+{{ end }}
+
+
+{{ range $host, $containers := groupByMulti $ "Env.VIRTUAL_HOST" "," }}
 
 server {
 	gzip_types text/plain text/css application/json application/x-javascript text/xml application/xml application/xml+rss text/javascript;
@@ -48,8 +52,19 @@ server {
 	error_log /proc/self/fd/2;
 	access_log /proc/self/fd/1;
 
-	{{ range $proxyRoute, $element := groupByMulti $ "Env.DOMAIN_PROXIES" "," }}
-	{{ $proxyRouteArray := split $proxyRoute ":" }}
+	location / {
+		proxy_pass http://{{ $host }};
+		include /etc/nginx/proxy_params;
+
+		# HTTP 1.1 support
+		proxy_http_version 1.1;
+		proxy_set_header Connection "";
+	}
+
+	{{ range $index, $value := $containers }}
+	{{ if $value.Env.DOMAIN_PROXIES }}
+	{{ range $proxyRoutes := split $value.Env.DOMAIN_PROXIES "," }}
+	{{ $proxyRouteArray := split $proxyRoutes ":" }}
 	{{ $location := index $proxyRouteArray 0 }}
 	{{ $proxy_to := index $proxyRouteArray 1 }}
 
@@ -61,15 +76,10 @@ server {
 		proxy_http_version 1.1;
 		proxy_set_header Connection "";
 	}
+
 	{{ end }}
-
-	location / {
-		proxy_pass http://{{ $host }};
-		include /etc/nginx/proxy_params;
-
-		# HTTP 1.1 support
-		proxy_http_version 1.1;
-		proxy_set_header Connection "";
-	}
+	{{ end }}
+	{{ end }}
 }
+
 {{ end }}
